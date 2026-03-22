@@ -1,0 +1,10 @@
+# Runtime data — never commit
+data/
+wiki/
+config/
+
+# Deno cache
+.deno/
+
+# OS
+.DS_Store
