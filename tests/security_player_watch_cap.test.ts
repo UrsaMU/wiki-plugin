@@ -17,7 +17,7 @@ function watchReq(path: string): Request {
   return new Request(`http://localhost/api/v1/wiki/${path}/watch`, { method: "POST" });
 }
 
-describe("handleWatch — per-player subscription cap", () => {
+describe({ name: "handleWatch — per-player subscription cap", sanitizeResources: false, sanitizeOps: false }, () => {
   beforeAll(async () => {
     // Seed exactly MAX_PLAYER_SUBS subscriptions sequentially to avoid
     // concurrent KV-open issues with the DBO singleton
