@@ -6,6 +6,7 @@ import {
 } from "../fs.ts";
 import { canReadPage } from "../permissions.ts";
 import { scanBacklinks } from "../backlinks.ts";
+import { emitListing } from "../format.ts";
 
 // ─── helpers ─────────────────────────────────────────────────────────────────
 
@@ -40,7 +41,12 @@ Examples:
   +wiki/tag ic             List all IC-tagged pages.
   +wiki/recent 5           Show the 5 most recently edited pages.
   +wiki/toc lore/history   Show section headings for lore/history.
-  +wiki/backlinks factions Show pages that link to factions.`,
+  +wiki/backlinks factions Show pages that link to factions.
+
+Skinning:
+  Listings honor the &WIKILISTFORMAT (full block) and &WIKIROWFORMAT
+  (per-entry row) attributes on #0 (game-wide) or on the viewer.
+  %0 in the format string receives the default rendered text.`,
 
   exec: async (u: IUrsamuSDK) => {
     const sw  = (u.cmd.args[0] ?? "").toLowerCase().trim();
@@ -71,13 +77,15 @@ async function cmdRoot(u: IUrsamuSDK): Promise<void> {
   if (!entries.length) { u.send("The wiki is empty."); return; }
   entries.sort((a, b) => a.name.localeCompare(b.name));
 
-  u.send(hdr("WIKI"));
-  u.send("%ch" + "-".repeat(40) + "%cn");
-  for (const e of entries) {
-    u.send((e.type === "dir" ? "%ch%cb[dir]%cn " : "      ") + e.name);
-  }
-  u.send("%ch" + "-".repeat(40) + "%cn");
-  u.send('Use "+wiki <path>" to read a page or list a directory.');
+  const sep40 = "%ch" + "-".repeat(40) + "%cn";
+  const rows = entries.map((e) =>
+    (e.type === "dir" ? "%ch%cb[dir]%cn " : "      ") + e.name,
+  );
+  await emitListing(u, {
+    header: hdr("WIKI") + "\n" + sep40,
+    rows,
+    footer: sep40 + "\n" + 'Use "+wiki <path>" to read a page or list a directory.',
+  });
 }
 
 // ─── read page or directory ───────────────────────────────────────────────────
@@ -131,14 +139,15 @@ async function cmdRead(u: IUrsamuSDK, wikiPath: string): Promise<void> {
   if (!children.length) { u.send(`'${wikiPath}' is empty.`); return; }
   children.sort((a, b) => a.path.localeCompare(b.path));
 
-  u.send(hdr(wikiPath.toUpperCase()));
-  u.send(SEP60);
-  for (const c of children) {
+  const rows = children.map((c) => {
     const marker = c.type === "dir" ? "%ch%cb[dir]%cn " : "      ";
-    u.send(marker + u.util.ljust(c.path.split("/").pop() || c.path, 28) + " " + c.title);
-  }
-  u.send(SEP60);
-  u.send(`Use "+wiki ${wikiPath}/<page>" to read a page.`);
+    return marker + u.util.ljust(c.path.split("/").pop() || c.path, 28) + " " + c.title;
+  });
+  await emitListing(u, {
+    header: hdr(wikiPath.toUpperCase()) + "\n" + SEP60,
+    rows,
+    footer: SEP60 + "\n" + `Use "+wiki ${wikiPath}/<page>" to read a page.`,
+  });
 }
 
 // ─── /search ─────────────────────────────────────────────────────────────────
@@ -162,10 +171,11 @@ async function cmdSearch(u: IUrsamuSDK, arg: string): Promise<void> {
   }
 
   if (!hits.length) { u.send(`No wiki pages match "${arg}".`); return; }
-  u.send(`%ch%cw${hits.length} result(s) for "${arg}":%cn`);
-  u.send(SEP60);
-  for (const h of hits) u.send(u.util.ljust(h.path, 36) + " " + h.title);
-  u.send(SEP60);
+  await emitListing(u, {
+    header: `%ch%cw${hits.length} result(s) for "${arg}":%cn` + "\n" + SEP60,
+    rows: hits.map((h) => u.util.ljust(h.path, 36) + " " + h.title),
+    footer: SEP60,
+  });
 }
 
 // ─── /tag ────────────────────────────────────────────────────────────────────
@@ -185,10 +195,11 @@ async function cmdTagList(u: IUrsamuSDK, tag: string): Promise<void> {
   }
 
   if (!hits.length) { u.send(`No wiki pages tagged "${tag}".`); return; }
-  u.send(hdr(`TAG: ${tag.toUpperCase()}`));
-  u.send(SEP60);
-  for (const h of hits) u.send(u.util.ljust(h.path, 36) + " " + h.title);
-  u.send(SEP60);
+  await emitListing(u, {
+    header: hdr(`TAG: ${tag.toUpperCase()}`) + "\n" + SEP60,
+    rows: hits.map((h) => u.util.ljust(h.path, 36) + " " + h.title),
+    footer: SEP60,
+  });
 }
 
 // ─── /recent ─────────────────────────────────────────────────────────────────
@@ -211,14 +222,16 @@ async function cmdRecent(u: IUrsamuSDK, arg: string): Promise<void> {
   const top = items.slice(0, n);
 
   if (!top.length) { u.send("No wiki pages found."); return; }
-  u.send(hdr(`RECENT PAGES (${top.length})`));
-  u.send(SEP60);
-  for (const p of top) {
+  const rows = top.map((p) => {
     const d = new Date(p.mtime);
     const ds = isNaN(d.getTime()) ? "" : ` (${d.toISOString().slice(0, 10)})`;
-    u.send(u.util.ljust(p.path, 36) + " " + p.title + ds);
-  }
-  u.send(SEP60);
+    return u.util.ljust(p.path, 36) + " " + p.title + ds;
+  });
+  await emitListing(u, {
+    header: hdr(`RECENT PAGES (${top.length})`) + "\n" + SEP60,
+    rows,
+    footer: SEP60,
+  });
 }
 
 // ─── /toc ────────────────────────────────────────────────────────────────────
@@ -255,8 +268,9 @@ async function cmdBacklinks(u: IUrsamuSDK, arg: string): Promise<void> {
   const links    = await scanBacklinks(wikiPath);
 
   if (!links.length) { u.send(`No pages link to '${wikiPath}'.`); return; }
-  u.send(hdr(`BACKLINKS: ${wikiPath}`));
-  u.send(SEP60);
-  for (const l of links) u.send(u.util.ljust(l.path, 36) + " " + l.title);
-  u.send(SEP60);
+  await emitListing(u, {
+    header: hdr(`BACKLINKS: ${wikiPath}`) + "\n" + SEP60,
+    rows: links.map((l) => u.util.ljust(l.path, 36) + " " + l.title),
+    footer: SEP60,
+  });
 }
