@@ -1,7 +1,7 @@
 {
   "name": "wiki",
-  "version": "2.3.0",
+  "version": "2.3.1",
   "description": "File-based markdown wiki with categories, revision history, access control, Discord webhooks, wikilinks, and reply-watch subscriptions.",
   "main": "mod.ts",
-  "ursamu": ">=2.3.0"
+  "ursamu": ">=2.3.3"
 }

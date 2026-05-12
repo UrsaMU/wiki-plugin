@@ -13,27 +13,20 @@
  * `%0` inside a format string receives the default rendered block or row.
  */
 import {
-  dbojs,
-  resolveFormat,
+  resolveGlobalFormat as resolveGlobalFormatShared,
   type FormatSlot,
 } from "@ursamu/ursamu";
-import type { IDBObj, IUrsamuSDK } from "@ursamu/ursamu";
+import type { IUrsamuSDK } from "@ursamu/ursamu";
 
 export type WikiFormatSlot = "WIKILISTFORMAT" | "WIKIROWFORMAT";
 
 /** Consult `#0` first, then the enactor; return null if neither overrides. */
-export async function resolveGlobalFormat(
+export function resolveGlobalFormat(
   u: IUrsamuSDK,
   slot: WikiFormatSlot,
   defaultArg: string,
 ): Promise<string | null> {
-  const root = await dbojs.queryOne({ id: "0" }).catch(() => null);
-  if (root) {
-    const rootObj = root as unknown as IDBObj;
-    const onRoot = await resolveFormat(u, rootObj, slot as FormatSlot, defaultArg);
-    if (onRoot != null) return onRoot;
-  }
-  return await resolveFormat(u, u.me, slot as FormatSlot, defaultArg);
+  return resolveGlobalFormatShared(u, slot as unknown as FormatSlot, defaultArg);
 }
 
 /**
